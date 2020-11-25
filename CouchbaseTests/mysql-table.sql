@@ -1,0 +1,7 @@
+﻿CREATE TABLE `test` (
+	`Id` INT(11) NOT NULL,
+	`Data` MEDIUMTEXT NULL DEFAULT NULL COLLATE 'latin1_swedish_ci',
+	PRIMARY KEY (`Id`) USING BTREE
+)
+COLLATE='latin1_swedish_ci'
+ENGINE=InnoDB;

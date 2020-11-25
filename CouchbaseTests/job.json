@@ -1,0 +1,67 @@
+{
+  "JobId": 321123123,
+  "TransportId": 123345,
+  "CustomerName": "Test Testson",
+  "Nodes": [
+    {
+      "Address": {
+        "GeoLocation": {
+          "Latitude": 15.534564,
+          "Longitude": 50.534132
+        },
+        "Id": 105847,
+        "RoadName": "RoadName",
+        "Number": "22A",
+        "Muni": "Municipality 1",
+        "City": "City 1",
+        "Reference": "",
+        "Comment": "By the entrance",
+        "Name": "My special name",
+        "Instruction": ""
+      },
+      "Time": "2014-08-12T16:02:00",
+      "Test": "help needed",
+      "Test2": 180,
+      "Test3": "START"
+    },
+    {
+      "Address": {
+        "GeoLocation": {
+          "Latitude": 15.0,
+          "Longitude": 50.0
+        },
+        "Id": 105848,
+        "RoadName": "Roadname 2",
+        "Number": "1",
+        "Muni": "Muni 2",
+        "City": "",
+        "Reference": "10Km northeast",
+        "Comment": "",
+        "Name": "",
+        "Instruction": ""
+      },
+      "Time": "2014-08-12T16:22:00",
+      "DriverAssistance": "",
+      "Test4": 60,
+      "Test5": "END"
+    }
+  ],
+  "Time1": "2014-08-12T16:00:00",
+  "Time2": "",
+  "Time3": "",
+  "ServiceFee": "150.50kr, cash",
+  "ServiceFeeValue": 150.5,
+  "LineInfo": "",
+  "Instruction": "Drive slowly",
+  "PhoneNumber": "+123456789",
+  "Test6": "Test6",
+  "Test7": "Test7",
+  "Test8": "Test8",
+  "Test9": "",
+  "Test10": true,
+  "Test11": "1234",
+  "Test12": "PLANNED",
+  "Test13": "VEHICLE",
+  "Time4": "2014-08-12T16:00:00",
+  "Cost": 250.5
+}

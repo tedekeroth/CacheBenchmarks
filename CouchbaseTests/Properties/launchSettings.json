@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "CouchbaseTests": {
+      "commandName": "Project",
+      "commandLineArgs": "\"8418-e1JlZjo4NDE4LE5hbWU6U25hcGNvZGUgQUIsVHlwZTpJbmRpZSxNZXRhOjAsSGFzaDpoaG1yZHJFeDVSb1dRTFdReWtkNGg4RnJBWmdlU1RXUkZlRU5Wd203ajNxbkMyMlpkSGl1REt6bE9lK0k0SXBGN3laL0NPUzM4UEZhNWZ5UzBKMUlhRVcyOW9qd0JXNnpPRFcxazhuQkNwMS9SL3VJMDhqWEdKcEtya2k4MkVBQnlNRHFLSEVOam1zM1FqcDR5N0dPTW5ld0ZodUNLRXkvZTdtVGtVbjFLczg9LEV4cGlyeToyMDIxLTA3LTI1fQ==\""
+    }
+  }
+}
