@@ -59,7 +59,7 @@ namespace CouchbaseTests
         public async Task CreateJobs(int nbr, Database databases)
         {
             jsonObjects.Clear();
-            for (int i = 0; i < nbr; i++)
+            for (int i = 1; i <= nbr; i++)
             {
                 JObject temp = JObject.FromObject(_baseJsonObject);
                 temp["JobId"] = i;
@@ -74,6 +74,13 @@ namespace CouchbaseTests
                 IBucket bucket = await cluster.BucketAsync("myBucket");
                 IScope scope = bucket.Scope("myScope");
                 var collection = scope.Collection("myCollection");
+
+                // avoid measuring lazy loading:
+                JObject t = JObject.FromObject(_baseJsonObject);
+                t["JobId"] = 0;
+                t["CustomerName"] = $"{firstnames[rand.Next(0, firstnames.Count - 1)]} {lastnames[rand.Next(0, lastnames.Count - 1)]}";
+                await collection.InsertAsync("0", t);
+                await collection.RemoveAsync("0");
 
                 List<Task> inserTasks = new List<Task>();
                 sw.Start();
