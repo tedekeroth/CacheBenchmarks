@@ -82,13 +82,13 @@ namespace CouchbaseTests
                 await collection.InsertAsync("0", t);
                 await collection.RemoveAsync("0");
 
-                List<Task> inserTasks = new List<Task>();
+                // List<Task> inserTasks = new List<Task>();
                 sw.Start();
                 foreach (JObject temp in jsonObjects)
                 {
-                    inserTasks.Add(collection.InsertAsync(temp.GetValue("JobId").ToString(), temp));
+                    await collection.InsertAsync(temp.GetValue("JobId").ToString(), temp);
                 }
-                await Task.WhenAll(inserTasks);
+                // await Task.WhenAll(inserTasks);
                 sw.Stop();
                 Console.WriteLine($"Adding {nbr} to Couchbase took {sw.ElapsedMilliseconds} ms");
                 sw.Reset();
