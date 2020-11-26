@@ -5,6 +5,7 @@ using Couchbase.Core.IO.Transcoders;
 using Couchbase.KeyValue;
 using Couchbase.Query;
 using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ServiceStack;
 using ServiceStack.Redis;
@@ -23,6 +24,7 @@ namespace CouchbaseTests
 
         private JObject _baseJsonObject = null;
         private List<JObject> jsonObjects = new List<JObject>();
+        private List<Root> pocoObjects = new List<Root>();
         private List<string> firstnames = new List<string>();
         private List<string> lastnames = new List<string>();
         private Random rand = new Random();
@@ -56,7 +58,7 @@ namespace CouchbaseTests
             Aerospike = 8
         }
 
-        public async Task CreateJobs(int nbr, Database databases)
+        public async Task CreateJobs(int nbr, Database databases, bool useStronglyTyped = false)
         {
             jsonObjects.Clear();
             for (int i = 1; i <= nbr; i++)
@@ -65,6 +67,8 @@ namespace CouchbaseTests
                 temp["JobId"] = i;
                 temp["CustomerName"] = $"{firstnames[rand.Next(0, firstnames.Count - 1)]} {lastnames[rand.Next(0, lastnames.Count - 1)]}";
                 jsonObjects.Add(temp);
+
+                pocoObjects.Add(JsonConvert.DeserializeObject<Root>(temp.ToString())); // added option to use strongly typed stuff
             }
 
             Stopwatch sw = new Stopwatch();
@@ -84,9 +88,19 @@ namespace CouchbaseTests
 
                 // List<Task> inserTasks = new List<Task>();
                 sw.Start();
-                foreach (JObject temp in jsonObjects)
+                if (useStronglyTyped)
                 {
-                    await collection.InsertAsync(temp.GetValue("JobId").ToString(), temp);
+                    foreach(Root root in pocoObjects)
+                    {
+                        await collection.InsertAsync(root.JobId.ToString(), root);
+                    }
+                }
+                else
+                {
+                    foreach (JObject temp in jsonObjects)
+                    {
+                        await collection.InsertAsync(temp.GetValue("JobId").ToString(), temp);
+                    }
                 }
                 // await Task.WhenAll(inserTasks);
                 sw.Stop();
@@ -99,9 +113,10 @@ namespace CouchbaseTests
                 sw.Restart();
                 using (var client = redisManager.GetClient())
                 {
+                    // no concepts of strongly typed in redis...
                     foreach (JObject temp in jsonObjects)
                     {
-                        client.Set($"jobId:{temp.GetValue("JobId")}", temp.ToString());
+                        client.Set($"jobId:{temp.GetValue("JobId")}", temp.ToString()); 
                     }
                 }
                 sw.Stop();
@@ -133,6 +148,7 @@ namespace CouchbaseTests
                  * bins = columns */
 
                 sw.Restart();
+                // no concept of strongly typed
                 foreach (JObject temp in jsonObjects)
                 {
                     aeroClient.Put(null, new Key("test", "cache", temp.GetValue("JobId").ToString()), new Bin[]
