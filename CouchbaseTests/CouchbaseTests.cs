@@ -42,9 +42,12 @@ namespace CouchbaseTests
 
         public async Task Init()
         {
-            aeroClient = new AerospikeClient("127.0.0.1", 3000);
-            cluster = await Couchbase.Cluster.ConnectAsync("couchbase://localhost", "root", "root");
-            redisManager = new RedisManagerPool("localhost:6379");
+            try { aeroClient = new AerospikeClient("127.0.0.1", 3000); } catch { }
+
+            try { cluster = await Couchbase.Cluster.ConnectAsync("couchbase://localhost", "root", "root"); } catch { }
+            
+            try { redisManager = new RedisManagerPool("localhost:6379"); } catch { }
+
             _baseJsonObject = JObject.Parse(File.ReadAllText(jsonFile));
         }
 
@@ -55,7 +58,8 @@ namespace CouchbaseTests
             Redis = 1,
             Couchbase = 2,
             MySql = 4,
-            Aerospike = 8
+            Aerospike = 8,
+            RediSql = 16
         }
 
         public async Task CreateJobs(int nbr, Database databases, bool useStronglyTyped = false)
@@ -70,6 +74,7 @@ namespace CouchbaseTests
 
                 pocoObjects.Add(JsonConvert.DeserializeObject<Root>(temp.ToString())); // added option to use strongly typed stuff
             }
+            Console.WriteLine($"Done initializing dummy objects");
 
             Stopwatch sw = new Stopwatch();
             if (databases.HasFlag(Database.Couchbase))
@@ -109,7 +114,7 @@ namespace CouchbaseTests
             }
 
             if (databases.HasFlag(Database.Redis))
-            {
+            {   
                 sw.Restart();
                 using (var client = redisManager.GetClient())
                 {
@@ -161,8 +166,40 @@ namespace CouchbaseTests
                 Console.WriteLine($"Adding {nbr} to Aerospike took {sw.ElapsedMilliseconds} ms");
                 sw.Reset();
             }
+
+            if (databases.HasFlag(Database.RediSql))
+             {
+                var dbName = "db";
+                using (var client = redisManager.GetClient())
+                {
+
+                    client.Custom($"DEL", dbName);
+                    client.Custom($"REDISQL.CREATE_DB", dbName);
+                    client.Custom($"REDISQL.EXEC", dbName, $"CREATE TABLE alfacom_jobcache (Id INT, Data TEXT)");
+                    client.Custom($"REDISQL.EXEC", dbName, $"CREATE INDEX jobid_idx ON jobcache (Id)");
+                    
+                }
+                
+                sw.Restart();
+                using (var client = redisManager.GetClient())
+                {
+                    // no concepts of strongly typed in redis...
+                    foreach (JObject temp in jsonObjects)
+                    {
+                        RediSqlCommand(client, dbName, $"INSERT INTO jobcache VALUES ({temp.GetValue("JobId")}, '{temp.ToString(Formatting.Indented)}')");
+                    }
+                }
+                sw.Stop();
+                Console.WriteLine($"Adding {nbr} to RediSql took {sw.ElapsedMilliseconds} ms");
+                sw.Reset();
+            }
         }
 
+        private RedisText RediSqlCommand(IRedisClient client, string db, string sql)
+        {
+            string command = $"REDISQL.EXEC";
+            return client.Custom(command, db,  sql);
+        }
 
         public async Task SelectRandomJobs(int nbr, Database databases)
         {
@@ -250,8 +287,23 @@ namespace CouchbaseTests
                     Console.WriteLine($"Aerospike Q: {q} \t{sw.ElapsedMilliseconds} ms");
                     sw.Reset();
                 }
+            }
 
-                
+            if (databases.HasFlag(Database.RediSql))
+            {
+                for (int q = 0; q < 10; q++)
+                {
+                    Stopwatch sw = Stopwatch.StartNew();
+                    using (var client = redisManager.GetClient())
+                    {
+                        for (int i = 0; i < nbr; i++)
+                        {
+                            RedisText t = RediSqlCommand(client, "db", $"SELECT * FROM jobcache WHERE Id={r.Next(1, 100000)}");
+                        }
+                    }
+                    sw.Stop();
+                    Console.WriteLine($"RediSql Q: {q}\t{sw.ElapsedMilliseconds}");
+                }
             }
         }
     }
