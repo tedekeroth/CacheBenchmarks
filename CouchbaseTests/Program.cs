@@ -10,8 +10,11 @@ namespace CouchbaseTests
             Console.WriteLine("Hello World!");
             CouchbaseTests ct = new CouchbaseTests(args[0]);
             await ct.Init();
-            await ct.CreateJobs(100000, CouchbaseTests.Database.RediSql | CouchbaseTests.Database.Redis);
-            await ct.SelectRandomJobs(1000, CouchbaseTests.Database.RediSql | CouchbaseTests.Database.Redis);
+
+            if (args.Length <= 1 || args[1].Contains("C"))
+                await ct.CreateJobs(1000000, CouchbaseTests.Database.RediSql );
+            if (args.Length <= 1 || args[1].Contains("R"))
+                await ct.SelectRandomJobs(1000, CouchbaseTests.Database.RediSql);
         }
     }
 }

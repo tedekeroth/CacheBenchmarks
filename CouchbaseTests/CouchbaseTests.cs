@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -23,7 +24,6 @@ namespace CouchbaseTests
         private string jsonFile = Environment.CurrentDirectory + @"\job.json";
 
         private JObject _baseJsonObject = null;
-        private List<JObject> jsonObjects = new List<JObject>();
         private List<Root> pocoObjects = new List<Root>();
         private List<string> firstnames = new List<string>();
         private List<string> lastnames = new List<string>();
@@ -35,7 +35,6 @@ namespace CouchbaseTests
         public CouchbaseTests(string serviceStackLicense)
         { 
             Licensing.RegisterLicense(serviceStackLicense); // ServiceStack licensing, if no license, dont test using Redis/SS, or replace lib
-            jsonObjects = new List<JObject>();
             firstnames.AddRange(File.ReadAllText(Environment.CurrentDirectory + @"\firstnames.txt").Split(Environment.NewLine));
             lastnames.AddRange(File.ReadAllText(Environment.CurrentDirectory + @"\lastnames.txt").Split(Environment.NewLine));
         }
@@ -64,17 +63,7 @@ namespace CouchbaseTests
 
         public async Task CreateJobs(int nbr, Database databases, bool useStronglyTyped = false)
         {
-            jsonObjects.Clear();
-            for (int i = 1; i <= nbr; i++)
-            {
-                JObject temp = JObject.FromObject(_baseJsonObject);
-                temp["JobId"] = i;
-                temp["CustomerName"] = $"{firstnames[rand.Next(0, firstnames.Count - 1)]} {lastnames[rand.Next(0, lastnames.Count - 1)]}";
-                jsonObjects.Add(temp);
-
-                pocoObjects.Add(JsonConvert.DeserializeObject<Root>(temp.ToString())); // added option to use strongly typed stuff
-            }
-            Console.WriteLine($"Done initializing dummy objects");
+            // pocoObjects.Add(JsonConvert.DeserializeObject<Root>(temp.ToString())); // added option to use strongly typed stuff
 
             Stopwatch sw = new Stopwatch();
             if (databases.HasFlag(Database.Couchbase))
@@ -85,7 +74,7 @@ namespace CouchbaseTests
                 var collection = scope.Collection("myCollection");
 
                 // avoid measuring lazy loading:
-                JObject t = JObject.FromObject(_baseJsonObject);
+                JObject t = JObject.FromObject(this._baseJsonObject);
                 t["JobId"] = 0;
                 t["CustomerName"] = $"{firstnames[rand.Next(0, firstnames.Count - 1)]} {lastnames[rand.Next(0, lastnames.Count - 1)]}";
                 await collection.InsertAsync("0", t);
@@ -95,16 +84,18 @@ namespace CouchbaseTests
                 sw.Start();
                 if (useStronglyTyped)
                 {
-                    foreach(Root root in pocoObjects)
+                    for (int i = 0; i < nbr; i++)
                     {
-                        await collection.InsertAsync(root.JobId.ToString(), root);
+                        JObject tempObject = SetTempValue(_baseJsonObject, i);
+                        await collection.InsertAsync(i.ToString(), JsonConvert.DeserializeObject<Root>(tempObject.ToString()));
                     }
                 }
                 else
                 {
-                    foreach (JObject temp in jsonObjects)
+                    for (int i = 0; i < nbr; i++)
                     {
-                        await collection.InsertAsync(temp.GetValue("JobId").ToString(), temp);
+                        JObject tempObject = SetTempValue(_baseJsonObject, i);
+                        await collection.InsertAsync(i.ToString(), tempObject);
                     }
                 }
                 // await Task.WhenAll(inserTasks);
@@ -114,14 +105,15 @@ namespace CouchbaseTests
             }
 
             if (databases.HasFlag(Database.Redis))
-            {   
+            {
                 sw.Restart();
                 using (var client = redisManager.GetClient())
                 {
                     // no concepts of strongly typed in redis...
-                    foreach (JObject temp in jsonObjects)
+                    for (int i = 0; i < nbr; i++)
                     {
-                        client.Set($"jobId:{temp.GetValue("JobId")}", temp.ToString()); 
+                        JObject tempObject = SetTempValue(_baseJsonObject, i);
+                        client.Set($"jobId:{tempObject.GetValue("JobId")}", tempObject.ToString());
                     }
                 }
                 sw.Stop();
@@ -134,10 +126,11 @@ namespace CouchbaseTests
                 MySqlConnection mySqlConnection = new MySqlConnection("Server=localhost;Database=test;port=3306;User Id=root;password=root;"); // TODO replace user / pass
                 mySqlConnection.Open();
                 sw.Restart();
-                foreach (JObject temp in jsonObjects)
+                for (int i = 0; i < nbr; i++)
                 {
-                    MySqlCommand cmd = new MySqlCommand($"INSERT INTO test (id, data) VALUES ('{temp.GetValue("JobId")}', @data)", mySqlConnection);
-                    cmd.Parameters.AddWithValue("@data", temp.ToString());
+                    JObject tempObject = SetTempValue(_baseJsonObject, i);
+                    MySqlCommand cmd = new MySqlCommand($"INSERT INTO test (id, data) VALUES ('{tempObject.GetValue("JobId")}', @data)", mySqlConnection);
+                    cmd.Parameters.AddWithValue("@data", tempObject.ToString());
                     cmd.ExecuteNonQuery();
                 }
                 sw.Stop();
@@ -154,10 +147,11 @@ namespace CouchbaseTests
 
                 sw.Restart();
                 // no concept of strongly typed
-                foreach (JObject temp in jsonObjects)
+                for (int i = 0; i < nbr; i++)
                 {
+                    JObject temp = SetTempValue(_baseJsonObject, i);
                     aeroClient.Put(null, new Key("test", "cache", temp.GetValue("JobId").ToString()), new Bin[]
-                    { 
+                    {
                         new Bin("Id", temp.GetValue("JobId").ToString()),
                         new Bin("Data", temp.ToString())
                     });
@@ -172,21 +166,31 @@ namespace CouchbaseTests
                 var dbName = "db";
                 using (var client = redisManager.GetClient())
                 {
-
                     client.Custom($"DEL", dbName);
                     client.Custom($"REDISQL.CREATE_DB", dbName);
-                    client.Custom($"REDISQL.EXEC", dbName, $"CREATE TABLE alfacom_jobcache (Id INT, Data TEXT)");
+                    client.Custom($"REDISQL.EXEC", dbName, $"CREATE TABLE jobcache (Id INT, Data TEXT, timestamp TEXT)");
                     client.Custom($"REDISQL.EXEC", dbName, $"CREATE INDEX jobid_idx ON jobcache (Id)");
                     
                 }
-                
+                List<long> times = new List<long>();
                 sw.Restart();
                 using (var client = redisManager.GetClient())
                 {
+                    Stopwatch sw2 = new Stopwatch();
+                    
                     // no concepts of strongly typed in redis...
-                    foreach (JObject temp in jsonObjects)
+                    for (int i = 0; i < nbr; i++)
                     {
-                        RediSqlCommand(client, dbName, $"INSERT INTO jobcache VALUES ({temp.GetValue("JobId")}, '{temp.ToString(Formatting.Indented)}')");
+                        JObject tempObject = SetTempValue(_baseJsonObject, i);
+                        sw2.Restart();
+                        RediSqlCommand(client, dbName, $"INSERT INTO jobcache VALUES ({tempObject.GetValue("JobId")}, '{tempObject.ToString(Formatting.Indented)}', datetime('now'))");
+                        sw2.Stop();
+                        times.Add(sw2.ElapsedTicks);
+
+                        if (i % 5000 == 0)
+                        {
+                            Console.WriteLine($"i={i}: " + times[i]);
+                        }
                     }
                 }
                 sw.Stop();
@@ -195,10 +199,63 @@ namespace CouchbaseTests
             }
         }
 
-        private RedisText RediSqlCommand(IRedisClient client, string db, string sql)
+        /// <summary>
+        /// This will NOT work with Parallel work, async/await Task.WhenAll, since it changes the same object all the time!!!
+        /// </summary>
+        /// <param name="jObject"></param>
+        /// <param name="i"></param>
+        /// <returns></returns>
+        private JObject SetTempValue(JObject jObject, int i)
+        {
+            jObject["JobId"] = i;
+            jObject["CustomerName"] = $"{firstnames[rand.Next(0, firstnames.Count - 1)]} {lastnames[rand.Next(0, lastnames.Count - 1)]}";
+            return jObject;
+        }
+
+        private RedisText RediSqlCommand(IRedisClient client, string db, string sqlCommand)
         {
             string command = $"REDISQL.EXEC";
-            return client.Custom(command, db,  sql);
+
+            List<string> finalColumnNames = new List<string>();
+            if (sqlCommand.Trim().StartsWith("SELECT"))
+            {
+                var from = sqlCommand.IndexOf("SELECT ") + "SELECT ".Length;
+                var to = sqlCommand.IndexOf(" FROM");
+                var selectedColumns = sqlCommand[from..to];
+
+                if (selectedColumns.Equals("*"))
+                {
+                    // Find all cols
+                    RedisText sqlitemaster = client.Custom(command, db, "select * from sqlite_master;");
+                }
+                else
+                {
+                    string[] cols = selectedColumns.Split(",");
+                    for (int i = 0; i < cols.Length; i++)
+                    {
+                        cols[i] = cols[i].Trim();
+                    }
+
+                    foreach(string col in cols)
+                    {
+                        string colName = null;
+                        if (col.Contains(" as "))
+                        {
+                            var i1 = col.IndexOf(" as ") + " AS ".Length;
+                            colName = col[i1..];
+                        }
+                        else
+                        {
+                            colName = col;
+                        }
+                        finalColumnNames.Add(colName);
+                    }
+                }
+            }
+
+            
+            RedisText rt = client.Custom(command, db,  sqlCommand);
+            return rt;
         }
 
         public async Task SelectRandomJobs(int nbr, Database databases)
@@ -296,9 +353,13 @@ namespace CouchbaseTests
                     Stopwatch sw = Stopwatch.StartNew();
                     using (var client = redisManager.GetClient())
                     {
+                        RedisText redisText = client.Custom($"type", "db");
+
                         for (int i = 0; i < nbr; i++)
                         {
-                            RedisText t = RediSqlCommand(client, "db", $"SELECT * FROM jobcache WHERE Id={r.Next(1, 100000)}");
+                            //RedisText t = RediSqlCommand(client, "db", $"SELECT Id, Data, datetime(timestamp) as dt FROM jobcache WHERE Id={r.Next(1, 100000)} OR Id={r.Next(1, 100000)}");
+                            RedisText t = RediSqlCommand(client, "db", $"SELECT * FROM jobcache WHERE Id={r.Next(1, 100000)} OR Id={r.Next(1, 100000)}");
+                            var keys = t.GetResults();
                         }
                     }
                     sw.Stop();
